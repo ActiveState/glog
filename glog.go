@@ -94,16 +94,18 @@ import (
 type severity int32 // sync/atomic int32
 
 const (
-	infoLog severity = iota
+	debugLog severity = iota
+	infoLog
 	warningLog
 	errorLog
 	fatalLog
-	numSeverity = 4
+	numSeverity = 5
 )
 
-const severityChar = "IWEF"
+const severityChar = "DIWEF"
 
 var severityName = []string{
+	debugLog:   "DEBUG",
 	infoLog:    "INFO",
 	warningLog: "WARNING",
 	errorLog:   "ERROR",
@@ -176,10 +178,11 @@ func (s *OutputStats) Bytes() int64 {
 // Stats tracks the number of lines of output and number of bytes
 // per severity level. Values must be read with atomic.LoadInt64.
 var Stats struct {
-	Info, Warning, Error OutputStats
+	Debug, Info, Warning, Error OutputStats
 }
 
 var severityStats = [numSeverity]*OutputStats{
+	debugLog:   &Stats.Debug,
 	infoLog:    &Stats.Info,
 	warningLog: &Stats.Warning,
 	errorLog:   &Stats.Error,
@@ -530,19 +533,6 @@ where the fields are defined as follows:
 func (l *loggingT) header(s severity) *buffer {
 	// Lmmdd hh:mm:ss.uuuuuu threadid file:line]
 	now := timeNow()
-	_, file, line, ok := runtime.Caller(3) // It's always the same number of frames to the user's call.
-	if !ok {
-		file = "???"
-		line = 1
-	} else {
-		slash := strings.LastIndex(file, "/")
-		if slash >= 0 {
-			file = file[slash+1:]
-		}
-	}
-	if line < 0 {
-		line = 0 // not a real line number, but acceptable to someDigits
-	}
 	if s > fatalLog {
 		s = infoLog // for safety.
 	}
@@ -550,29 +540,19 @@ func (l *loggingT) header(s severity) *buffer {
 
 	// Avoid Fprintf, for speed. The format is so simple that we can do it quickly by hand.
 	// It's worth about 3X. Fprintf is hard.
-	_, month, day := now.Date()
+	//_, month, day := now.Date()
 	hour, minute, second := now.Clock()
-	buf.tmp[0] = severityChar[s]
-	buf.twoDigits(1, int(month))
-	buf.twoDigits(3, day)
-	buf.tmp[5] = ' '
-	buf.twoDigits(6, hour)
-	buf.tmp[8] = ':'
-	buf.twoDigits(9, minute)
-	buf.tmp[11] = ':'
-	buf.twoDigits(12, second)
-	buf.tmp[14] = '.'
-	buf.nDigits(6, 15, now.Nanosecond()/1000)
-	buf.tmp[21] = ' '
-	buf.nDigits(5, 22, pid) // TODO: should be TID
-	buf.tmp[27] = ' '
-	buf.Write(buf.tmp[:28])
-	buf.WriteString(file)
-	buf.tmp[0] = ':'
-	n := buf.someDigits(1, line)
-	buf.tmp[n+1] = ']'
-	buf.tmp[n+2] = ' '
-	buf.Write(buf.tmp[:n+3])
+	//buf.twoDigits(0, int(month))
+	//buf.twoDigits(2, day)
+	//buf.tmp[4] = ' '
+	buf.twoDigits(0, hour)
+	buf.tmp[2] = ':'
+	buf.twoDigits(3, minute)
+	buf.tmp[5] = ':'
+	buf.twoDigits(6, second)
+	buf.tmp[8] = ' '
+	buf.Write(buf.tmp[:9])
+	buf.WriteString(fmt.Sprintf("%5s ", severityName[s]))
 	return buf
 }
 
@@ -669,6 +649,8 @@ func (l *loggingT) output(s severity, buf *buffer) {
 			fallthrough
 		case infoLog:
 			l.file[infoLog].Write(data)
+		case debugLog:
+			l.file[debugLog].Write(data)
 		}
 	}
 	if s == fatalLog {
@@ -819,7 +801,7 @@ func (l *loggingT) createFiles(sev severity) error {
 	now := time.Now()
 	// Files are created in decreasing severity order, so as soon as we find one
 	// has already been created, we can stop.
-	for s := sev; s >= infoLog && l.file[s] == nil; s-- {
+	for s := sev; s >= debugLog && l.file[s] == nil; s-- {
 		sb := &syncBuffer{
 			logger: l,
 			sev:    s,
@@ -956,6 +938,24 @@ func (v Verbose) Infof(format string, args ...interface{}) {
 	if v {
 		logging.printf(infoLog, format, args...)
 	}
+}
+
+// Debug logs to the DEBUG log.
+// Arguments are handled in the manner of fmt.Print; a newline is appended if missing.
+func Debug(args ...interface{}) {
+	logging.print(debugLog, args...)
+}
+
+// Debugln logs to the DEBUG log.
+// Arguments are handled in the manner of fmt.Println; a newline is appended if missing.
+func Debugln(args ...interface{}) {
+	logging.println(debugLog, args...)
+}
+
+// Debugf logs to the DEBUG log.
+// Arguments are handled in the manner of fmt.Printf; a newline is appended if missing.
+func Debugf(format string, args ...interface{}) {
+	logging.printf(debugLog, format, args...)
 }
 
 // Info logs to the INFO log.
