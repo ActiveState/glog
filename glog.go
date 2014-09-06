@@ -402,8 +402,8 @@ func init() {
 	flag.Var(&logging.vmodule, "vmodule", "comma-separated list of pattern=N settings for file-filtered logging")
 	flag.Var(&logging.traceLocation, "log_backtrace_at", "when logging hits line file:N, emit a stack trace")
 
-	// Default stderrThreshold is ERROR.
-	logging.stderrThreshold = errorLog
+	// Default stderrThreshold is Info.
+	logging.stderrThreshold = infoLog
 
 	logging.setVState(0, nil, false)
 	go logging.flushDaemon()
