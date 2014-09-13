@@ -107,7 +107,7 @@ const severityChar = "DIWEF"
 var severityName = []string{
 	debugLog:   "DEBUG",
 	infoLog:    "INFO",
-	warningLog: "WARNING",
+	warningLog: "WARN",
 	errorLog:   "ERROR",
 	fatalLog:   "FATAL",
 }
