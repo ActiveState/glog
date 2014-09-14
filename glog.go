@@ -533,6 +533,19 @@ where the fields are defined as follows:
 func (l *loggingT) header(s severity) *buffer {
 	// Lmmdd hh:mm:ss.uuuuuu threadid file:line]
 	now := timeNow()
+	_, file, line, ok := runtime.Caller(3) // It's always the same number of frames to the user's call.
+	if !ok {
+		file = "???"
+		line = 1
+	} else {
+		slash := strings.LastIndex(file, "/")
+		if slash >= 0 {
+			file = file[slash+1:]
+		}
+	}
+	if line < 0 {
+		line = 0 // not a real line number, but acceptable to someDigits
+	}
 	if s > fatalLog {
 		s = infoLog // for safety.
 	}
@@ -540,19 +553,29 @@ func (l *loggingT) header(s severity) *buffer {
 
 	// Avoid Fprintf, for speed. The format is so simple that we can do it quickly by hand.
 	// It's worth about 3X. Fprintf is hard.
-	//_, month, day := now.Date()
+	_, month, day := now.Date()
 	hour, minute, second := now.Clock()
-	//buf.twoDigits(0, int(month))
-	//buf.twoDigits(2, day)
-	//buf.tmp[4] = ' '
-	buf.twoDigits(0, hour)
-	buf.tmp[2] = ':'
-	buf.twoDigits(3, minute)
-	buf.tmp[5] = ':'
-	buf.twoDigits(6, second)
-	buf.tmp[8] = ' '
-	buf.Write(buf.tmp[:9])
-	buf.WriteString(fmt.Sprintf("%5s ", severityName[s]))
+	buf.tmp[0] = severityChar[s]
+	buf.twoDigits(1, int(month))
+	buf.twoDigits(3, day)
+	buf.tmp[5] = ' '
+	buf.twoDigits(6, hour)
+	buf.tmp[8] = ':'
+	buf.twoDigits(9, minute)
+	buf.tmp[11] = ':'
+	buf.twoDigits(12, second)
+	buf.tmp[14] = '.'
+	buf.nDigits(6, 15, now.Nanosecond()/1000)
+	buf.tmp[21] = ' '
+	buf.nDigits(5, 22, pid) // TODO: should be TID
+	buf.tmp[27] = ' '
+	buf.Write(buf.tmp[:28])
+	buf.WriteString(file)
+	buf.tmp[0] = ':'
+	n := buf.someDigits(1, line)
+	buf.tmp[n+1] = ']'
+	buf.tmp[n+2] = ' '
+	buf.Write(buf.tmp[:n+3])
 	return buf
 }
 
